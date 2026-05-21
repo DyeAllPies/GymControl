@@ -41,6 +41,10 @@ Fonte: [GymControl_Planejamento.docx](GymControl_Planejamento.docx) (entregue na
 - **Classes do modelo** (QUADRO 8): [Usuario](requirements/classes/usuario.md) · [Aluno](requirements/classes/aluno.md) · [Professor](requirements/classes/professor.md) · [Plano](requirements/classes/plano.md) · [Pagamento](requirements/classes/pagamento.md) · [Treino](requirements/classes/treino.md) · [Exercicio](requirements/classes/exercicio.md) · [Frequencia](requirements/classes/frequencia.md)
 - **Tecnologias** (QUADRO 11): [tecnologias.md](requirements/tecnologias.md)
 
+## Operação
+
+- **[Guia de deploy na AWS](aws-deploy-guide.md)** — passo a passo para subir o backend e conectar com o frontend já no ar na Vercel.
+
 ## Adicionado durante o desenvolvimento (fora do docx)
 
 Itens que não estavam no planejamento original mas foram incorporados (alguns reforçando RNF02 e RNF07):

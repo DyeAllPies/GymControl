@@ -74,7 +74,11 @@ Veja o runbook abaixo.
 
 ## Runbook de deploy
 
-> Pré-requisitos: AWS CLI configurado (`aws configure`), Terraform ≥ 1.6, Docker rodando.
+> 📘 **Guia operacional completo (recomendado):** [`../aws-deploy-guide.md`](../aws-deploy-guide.md) — passo a passo com higiene de conta AWS, billing alarm, integração com Vercel e troubleshooting.
+
+O resumo abaixo é o caminho feliz, para quem já passou pelo guia.
+
+Pré-requisitos: AWS CLI configurado (`aws configure`), Terraform ≥ 1.6, Docker rodando.
 
 ```bash
 # 1. Provisiona toda a infra (RDS demora ~5-10 min)
