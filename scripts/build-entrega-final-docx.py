@@ -426,32 +426,87 @@ def build():
     print("ficarem corretos. Não precisa rodar F9 manualmente.")
 
 
-def _clear_toc_caches(text):
-    """Para cada campo TOC, apaga o conteúdo cacheado entre seu fldChar
-    separate e o seu fldChar end correspondente. Como entradas do Sumário
-    contêm campos PAGEREF aninhados (cada um com seu próprio par
-    begin/end), regex sozinho não basta — é preciso casar par a par
-    contando profundidade."""
+def _move_sumario_before_lists(text):
+    """Move o bloco do Sumário (heading + parágrafo com o campo TOC \\o)
+    para imediatamente antes do bloco "LISTA DE QUADROS". No template da
+    parcial o Sumário aparece DEPOIS das listas, mas convencionalmente
+    o Sumário deve vir antes."""
     import re as _re
-    SEPARATE = '<w:fldChar w:fldCharType="separate"/>'
-    BEGIN    = '<w:fldChar w:fldCharType="begin"'   # prefixo (pode ter w:dirty)
-    END      = '<w:fldChar w:fldCharType="end"/>'
-    FALLBACK = '<w:r><w:t xml:space="preserve">Atualize os campos (F9).</w:t></w:r>'
+    BEGIN = '<w:fldChar w:fldCharType="begin"'
+    END   = '<w:fldChar w:fldCharType="end"/>'
+
+    # 1) Acha o <w:p> que contém o heading "SUMÁRIO".
+    sum_kw = _re.search(r'<w:p\b[^>]*>(?:(?!</w:p>).)*?SUMÁRIO(?:(?!</w:p>).)*?</w:p>', text, _re.S)
+    if not sum_kw:
+        return text
+    sum_p_start = sum_kw.start()
+
+    # 2) O parágrafo seguinte contém o fldChar begin do TOC \w \o. Acha o
+    #    fldChar end correspondente contando depth, depois fecha no </w:p>.
+    toc_instr = _re.search(
+        r'<w:instrText[^>]*>\s*TOC\s+\\w\s+\\o\b[^<]*</w:instrText>',
+        text[sum_kw.end():])
+    if not toc_instr:
+        return text
+    instr_end_abs = sum_kw.end() + toc_instr.end()
+    depth = 1
+    i = instr_end_abs
+    toc_end_abs = -1
+    while i < len(text):
+        b = text.find(BEGIN, i); e = text.find(END, i)
+        if e < 0: break
+        if 0 <= b < e:
+            depth += 1; i = b + len(BEGIN)
+        else:
+            depth -= 1
+            if depth == 0:
+                toc_end_abs = e + len(END); break
+            i = e + len(END)
+    if toc_end_abs < 0:
+        return text
+    # Fecha no próximo </w:p> após o fldChar end.
+    close_p = text.find('</w:p>', toc_end_abs)
+    if close_p < 0:
+        return text
+    sum_block_end = close_p + len('</w:p>')
+
+    # 3) Acha o início do <w:p> com "LISTA DE QUADROS".
+    lq = _re.search(r'<w:p\b[^>]*>(?:(?!</w:p>).)*?LISTA DE QUADROS', text, _re.S)
+    if not lq:
+        return text
+    lq_start = lq.start()
+
+    # Sumário está depois das listas? Se não, nada a fazer.
+    if sum_p_start <= lq_start:
+        return text
+
+    sumario_block = text[sum_p_start:sum_block_end]
+    return (
+        text[:lq_start] + sumario_block + text[lq_start:sum_p_start] + text[sum_block_end:]
+    )
+
+
+def _shift_tof_page_numbers(text, delta):
+    """Encontra cada campo TOC \\c (Lista de Quadros / Lista de Figuras) e
+    incrementa por `delta` cada número de página cacheado dentro dele.
+
+    O padrão é <w:tab/><w:t>NUMERO</w:t> dentro de cada entrada de TOF.
+    Por que precisamos: ao inserir capítulos novos antes do antigo
+    capítulo 9, o Sumário se expande. Quando o Word redesenha o doc,
+    todo conteúdo após o Sumário desce N páginas. As listas TOF têm
+    cache com a paginação da parcial; sem ajuste, ficam off-by-N
+    (N = 1, conforme verificado com o usuário)."""
+    import re as _re
+    BEGIN = '<w:fldChar w:fldCharType="begin"'
+    END   = '<w:fldChar w:fldCharType="end"/>'
 
     out = []
     cursor = 0
-    # Itera em cada instrText que abre um TOC. Para cada um, encontra o
-    # próximo separate logo a seguir; do separate, anda contando
-    # begin/end até zerar e achar o end deste TOC.
-    for m in _re.finditer(r'<w:instrText[^>]*>\s*TOC\b[^<]*</w:instrText>', text):
-        sep_idx = text.find(SEPARATE, m.end())
-        if sep_idx < 0:
-            continue
-        sep_end = sep_idx + len(SEPARATE)
-        # walk para frente contando depth
+    for m in _re.finditer(r'<w:instrText[^>]*>\s*TOC\s+\\c\b[^<]*</w:instrText>', text):
+        # Acha o fldChar end correspondente a este TOC, contando depth.
         depth = 1
-        i = sep_end
-        toc_end_start = -1
+        i = m.end()
+        toc_end = -1
         while i < len(text):
             b = text.find(BEGIN, i)
             e = text.find(END, i)
@@ -463,15 +518,20 @@ def _clear_toc_caches(text):
             else:
                 depth -= 1
                 if depth == 0:
-                    toc_end_start = e
+                    toc_end = e + len(END)
                     break
                 i = e + len(END)
-        if toc_end_start < 0:
+        if toc_end < 0:
             continue
-        # mantém [cursor : sep_end), insere fallback, pula para o end
-        out.append(text[cursor:sep_end])
-        out.append(FALLBACK)
-        cursor = toc_end_start
+        # Incrementa cada <w:tab/><w:t>N</w:t> dentro deste segmento.
+        segment = text[m.end():toc_end]
+        def _bump(match):
+            n = int(match.group(1)) + delta
+            return f'<w:tab/><w:t>{n}</w:t>'
+        segment = _re.sub(r'<w:tab/>\s*<w:t[^>]*>(\d+)</w:t>', _bump, segment)
+        out.append(text[cursor:m.end()])
+        out.append(segment)
+        cursor = toc_end
     out.append(text[cursor:])
     return "".join(out)
 
@@ -490,40 +550,45 @@ def _force_update_fields(path):
     import shutil
 
     tmp = path + ".tmp"
-    tag = '<w:updateFields w:val="true"/>'
 
     with zipfile.ZipFile(path, "r") as zin, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
         for item in zin.infolist():
             data = zin.read(item.filename)
             if item.filename == "word/settings.xml":
-                text = data.decode("utf-8")
-                if "<w:updateFields" in text:
-                    text = re.sub(r'<w:updateFields[^/]*/>', tag, text)
-                    text = re.sub(r'<w:updateFields\b[^>]*>.*?</w:updateFields>', tag, text, flags=re.S)
-                else:
-                    text = text.replace("</w:settings>", tag + "</w:settings>")
-                data = text.encode("utf-8")
-            elif item.filename == "word/document.xml":
-                # Para cada campo TOC (Sumário, Lista de Quadros, Lista de
-                # Figuras):
-                #   1) marca o fldChar begin como w:dirty="true"
-                #   2) APAGA todo o conteúdo cacheado entre <w:fldChar
-                #      separate/> e <w:fldChar end/>. Sem cache, o Word não
-                #      tem como mostrar números de página antigos: ele tem
-                #      que recalcular do zero ao abrir.
-                # Isso resolve o off-by-one em listas que mudam de tamanho
-                # ao serem refeitas: Word só conhece a paginação correta
-                # depois que as listas já têm sua versão definitiva.
+                # NÃO setamos updateFields="true". Se Word fizer refresh
+                # automático, ele recalcula as Listas de Quadros e
+                # Figuras contra a paginação corrente (com Sumário ainda
+                # em tamanho cacheado) e sobrescreve os números +1 que
+                # injetamos abaixo, voltando ao off-by-one. Removendo
+                # esse setting, Word abre sem prompt; usuário só precisa
+                # apertar F9 dentro do Sumário pra atualizá-lo.
                 text = data.decode("utf-8")
                 text = re.sub(
-                    r'(<w:fldChar w:fldCharType="begin")(/>\s*</w:r>\s*<w:r[^>]*>(?:<w:rPr>.*?</w:rPr>)?\s*<w:instrText[^>]*>\s*TOC\b)',
+                    r'<w:updateFields\s+w:val="true"\s*/>', '', text)
+                text = re.sub(
+                    r'<w:updateFields\b[^>]*>.*?</w:updateFields>', '',
+                    text, flags=re.S)
+                data = text.encode("utf-8")
+            elif item.filename == "word/document.xml":
+                # 1) Só o Sumário (TOC \o) fica dirty — precisa refletir
+                #    os capítulos 9, 10 e 11 novos.
+                # 2) Listas TOC \c "QUADRO" / "FIGURA" não ficam dirty:
+                #    Word não vai refrescá-las sozinho. Seus números
+                #    cacheados (vindos da parcial) ganham +1 para
+                #    compensar a página extra que o Sumário expandido
+                #    adiciona — verificado empiricamente off-by-1 com o
+                #    usuário.
+                text = data.decode("utf-8")
+                text = re.sub(
+                    r'(<w:fldChar w:fldCharType="begin")'
+                    r'(/>\s*</w:r>\s*<w:r[^>]*>(?:<w:rPr>.*?</w:rPr>\s*)?'
+                    r'<w:instrText[^>]*>\s*TOC\s+\\w\s+\\o\b)',
                     r'\1 w:dirty="true"\2',
                     text,
                     flags=re.S,
                 )
-                # Limpa o cache de cada TOC. O grupo anchored garante que só
-                # apagamos cache de campos cuja instrText começa com "TOC ".
-                text = _clear_toc_caches(text)
+                text = _shift_tof_page_numbers(text, delta=1)
+                text = _move_sumario_before_lists(text)
                 data = text.encode("utf-8")
             zout.writestr(item, data)
     shutil.move(tmp, path)
