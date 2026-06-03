@@ -357,6 +357,13 @@ def build():
     # Cover page mantém "Planejamento do Sistema" — o sistema ainda não está
     # em produção real (sem deploy de back-end ativo).
 
+    # Atualiza data da capa (aparece 2x: topo da capa e fim da contracapa).
+    # Template da parcial foi entregue em maio; a final é entregue em junho.
+    for p in doc.paragraphs:
+        for r in p.runs:
+            if "Maio de 2026" in r.text:
+                r.text = r.text.replace("Maio de 2026", "Junho de 2026")
+
     # 1b. Parágrafo de organização do trabalho no capítulo 1: reescrever para
     # refletir os 11 capítulos da entrega final (era 9).
     new_intro = (
