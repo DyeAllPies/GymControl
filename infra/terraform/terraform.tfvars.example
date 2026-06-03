@@ -1,0 +1,35 @@
+# Copie pra `terraform.tfvars` e edite. Esse arquivo é apenas referência,
+# não é lido pelo Terraform automaticamente.
+#
+#   cp terraform.tfvars.example terraform.tfvars
+#   # edite as duas linhas obrigatórias abaixo, salve, depois:
+#   terraform plan
+#
+# O `terraform.tfvars` está no .gitignore e NÃO deve ser commitado.
+
+# ─── Obrigatório se quiser receber alertas de billing por email ───────────
+# Sem isso, o budget não é criado (o que também é OK pra um teste rápido,
+# mas é mais arriscado se você esquecer recursos rodando).
+notify_email = "seu_email@exemplo.com"
+
+# ─── Opcional: ajustes ────────────────────────────────────────────────────
+# project_name = "gymcontrol"
+# environment  = "showcase"
+# region       = "sa-east-1"
+
+# Teto mensal antes de avisar. Default 25 USD cobre o cenário projetado
+# (~$8-22/mês). Se quiser ser mais conservador, baixe.
+# monthly_budget_usd = 25
+
+# db_instance_class       = "db.t4g.micro"
+# db_allocated_storage_gb = 20
+# db_backup_retention_days = 1
+
+# container_image_tag = "latest"
+
+# Frontend que recebe as chamadas /api/* — usado pelo CORS_ORIGINS.
+# Se mudar a URL do Vercel, atualize aqui.
+# frontend_origin = "https://gym-control-pearl.vercel.app"
+
+# apprunner_cpu    = "256"
+# apprunner_memory = "512"

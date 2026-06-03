@@ -57,12 +57,25 @@ aws sts get-caller-identity
 
 ## 2. Provisionar a infra
 
+Antes do primeiro `apply`, copie o template de variáveis e edite:
+
 ```bash
 cd infra/terraform
+cp terraform.tfvars.example terraform.tfvars
+# abra terraform.tfvars, ajuste notify_email pra um email seu
+# (sem isso, o billing alarm não é criado)
+```
+
+Depois:
+
+```bash
 terraform init     # baixa providers, ~30 s
+terraform validate # checa sintaxe (não fala com AWS)
 terraform plan     # mostra o que vai criar — confira que tudo é "Plan to add"
 terraform apply    # confirma "yes"; demora ~5-10 min, RDS é o gargalo
 ```
+
+> 💡 Se preferir pular o billing alarm (não recomendado), basta deixar `notify_email` vazio no tfvars. O Terraform só cria o budget quando o email está setado.
 
 **Outputs importantes** (anote, vão ser usados):
 
@@ -78,27 +91,21 @@ terraform output db_endpoint          # privado, só pra debug
 
 ## 3. Build da imagem e push pro ECR
 
-Volte pra raiz do repo:
+Da raiz do repo, o script `scripts/aws-deploy.sh` faz build + login no ECR + push + dispara o deploy do App Runner num único comando:
 
 ```bash
-cd ../..
+cd ../..   # volta pra raiz do repo
+./scripts/aws-deploy.sh
 ```
 
-Login no ECR (o token expira em 12 h, mas pra um deploy é suficiente):
+O que ele faz nos bastidores:
 
-```bash
-ECR_URL=$(cd infra/terraform && terraform output -raw ecr_repository_url)
-aws ecr get-login-password --region sa-east-1 \
-  | docker login --username AWS --password-stdin "$ECR_URL"
-```
+1. Lê `ecr_repository_url` e `apprunner_url` do `terraform output`
+2. `aws ecr get-login-password` → `docker login`
+3. `docker build` → `docker tag` → `docker push`
+4. `aws apprunner start-deployment`
 
-Build + tag + push:
-
-```bash
-docker build -t gymcontrol:latest .
-docker tag gymcontrol:latest "$ECR_URL:latest"
-docker push "$ECR_URL:latest"
-```
+> 💡 Se preferir rodar manualmente passo a passo (para entender o que acontece), os comandos equivalentes estão no comentário do início do script.
 
 > 💡 No Windows, se o `docker push` parar com "denied: access denied", refaça o `aws ecr get-login-password` — o token expirou.
 

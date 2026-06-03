@@ -57,3 +57,15 @@ variable "apprunner_memory" {
   type        = string
   default     = "512"
 }
+
+variable "notify_email" {
+  description = "Email para alertas de billing (80% e 100% do orçamento). Deixe vazio para não criar o budget."
+  type        = string
+  default     = ""
+}
+
+variable "monthly_budget_usd" {
+  description = "Teto mensal em USD. AWS dispara aviso ao chegar em 80% e em 100% (real ou previsto)."
+  type        = number
+  default     = 25
+}

@@ -57,9 +57,9 @@ resource "aws_iam_role_policy" "read_secrets" {
 # anômalo simplesmente enfileira em vez de virar uma conta cara.
 resource "aws_apprunner_auto_scaling_configuration_version" "this" {
   auto_scaling_configuration_name = "${local.name}-asc"
-  max_concurrency = 25
-  min_size        = 1
-  max_size        = 1
+  max_concurrency                 = 25
+  min_size                        = 1
+  max_size                        = 1
 }
 
 # ─── VPC Connector + Service ──────────────────────────────────────────────────

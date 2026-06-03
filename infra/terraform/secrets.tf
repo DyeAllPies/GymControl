@@ -27,8 +27,8 @@ resource "aws_secretsmanager_secret_version" "db_password" {
 }
 
 resource "aws_secretsmanager_secret" "jwt" {
-  name        = "${local.name}/jwt-secret"
-  description = "Chave de assinatura do JWT da aplicação"
+  name                    = "${local.name}/jwt-secret"
+  description             = "Chave de assinatura do JWT da aplicação"
   recovery_window_in_days = 0
 }
 
