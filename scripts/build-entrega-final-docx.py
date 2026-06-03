@@ -453,6 +453,20 @@ def _force_update_fields(path):
                 else:
                     text = text.replace("</w:settings>", tag + "</w:settings>")
                 data = text.encode("utf-8")
+            elif item.filename == "word/document.xml":
+                # Marca cada TOC/TOF como sujo. O setting global updateFields
+                # atualiza o TOC principal (\o), mas tabelas de figuras/quadros
+                # (TOC \c "FIGURA"/"QUADRO") ficam com a versão cacheada entre
+                # <w:fldChar separate/> e <w:fldChar end/> a menos que o
+                # fldChar begin tenha w:dirty="true".
+                text = data.decode("utf-8")
+                text = re.sub(
+                    r'(<w:fldChar w:fldCharType="begin")(/>\s*</w:r>\s*<w:r[^>]*>(?:<w:rPr>.*?</w:rPr>)?\s*<w:instrText[^>]*>\s*TOC\b)',
+                    r'\1 w:dirty="true"\2',
+                    text,
+                    flags=re.S,
+                )
+                data = text.encode("utf-8")
             zout.writestr(item, data)
     shutil.move(tmp, path)
 
