@@ -186,6 +186,117 @@ NEW_CHAPTERS = [
      "ferramental está pronto: bastaria executar terraform apply seguido "
      "do script scripts/aws-deploy.sh."),
 
+    ("Heading 2", "9.11 Rastreabilidade de requisitos"),
+    ("Normal",
+     "Esta seção mapeia cada requisito do capítulo 4 ao artefato concreto "
+     "que o implementa, demonstrando que todos foram efetivamente entregues. "
+     "Os requisitos funcionais (RF) são listados primeiro, seguidos dos "
+     "requisitos não funcionais (RNF). Caminhos referem-se à raiz do "
+     "repositório."),
+
+    ("Heading 3", "Requisitos funcionais"),
+    ("Normal",
+     "RF01 — Cadastro de alunos: rota POST /api/alunos em server.js, "
+     "restrita ao perfil Admin pelo middleware requireRole; tabela alunos "
+     "em sql/01_schema.sql com UNIQUE em CPF e validação de dígito "
+     "verificador em lib/validators.js. Tela: public/index.html → seção "
+     "#secAlunos, módulo public/js/alunos.js. Testes: tests/api.test.js "
+     "(criação válida, CPF inválido, CPF duplicado) e "
+     "tests/e2e/alunos.spec.js (CRUD com máscara de CPF)."),
+    ("Normal",
+     "RF02 — Edição e exclusão de alunos: rotas PUT /api/alunos/:id e "
+     "DELETE /api/alunos/:id em server.js, RBAC Admin; FK de pagamentos e "
+     "frequencias com ON DELETE CASCADE garante consistência. Tela e ações "
+     "no mesmo módulo public/js/alunos.js. Testes em tests/api.test.js e "
+     "tests/e2e/alunos.spec.js."),
+    ("Normal",
+     "RF03 — Cadastro de professores: rota POST /api/professores em "
+     "server.js, RBAC Admin; tabela professores com UNIQUE em CREF; "
+     "módulo public/js/professores.js. Testes: tests/api.test.js e "
+     "tests/e2e/professores.spec.js."),
+    ("Normal",
+     "RF04 — Cadastro de planos: rotas /api/planos em server.js, RBAC "
+     "Admin; tabela planos em sql/01_schema.sql; módulo public/js/planos.js. "
+     "Testes: tests/api.test.js."),
+    ("Normal",
+     "RF05 — Registrar pagamentos: rota POST /api/pagamentos em server.js, "
+     "RBAC Admin; tabela pagamentos com FK para alunos e planos, ENUM "
+     "(metodo, status) e CHECK valor > 0; módulo public/js/pagamentos.js. "
+     "Testes: tests/api.test.js e tests/e2e/pagamentos.spec.js."),
+    ("Normal",
+     "RF06 — Consultar inadimplentes: rota GET /api/inadimplentes em "
+     "server.js (query com LEFT JOIN entre alunos e pagamentos do mês "
+     "corrente), RBAC Admin; módulo public/js/inadimplentes.js. Teste "
+     "visual de RBAC em tests/e2e/rbac.spec.js (aluno não vê o menu)."),
+    ("Normal",
+     "RF07 — Cadastro de treinos: rotas /api/treinos e /api/treinos/:id/"
+     "exercicios em server.js, RBAC Professor (e Admin); tabelas treinos e "
+     "exercicios em sql/01_schema.sql com FK CASCADE; módulo "
+     "public/js/professor.js. Teste E2E em tests/e2e/professor.spec.js "
+     "(criação de treino com exercícios)."),
+    ("Normal",
+     "RF08 — Vincular treinos a alunos: coluna aluno_id na tabela treinos "
+     "com FK; tela do professor seleciona o aluno antes de criar o treino; "
+     "endpoint GET /api/alunos/me/treinos serve o painel do aluno "
+     "(public/js/aluno.js). Testes em tests/api.test.js."),
+    ("Normal",
+     "RF09 — Registrar frequência: rota POST /api/frequencias em "
+     "server.js; tabela frequencias com FK para alunos e UNIQUE (aluno_id, "
+     "data); módulo public/js/frequencia.js. Teste E2E em "
+     "tests/e2e/frequencia.spec.js (registro de check-in)."),
+    ("Normal",
+     "RF10 — Relatórios: dashboard em public/js/dashboard.js consome "
+     "GET /api/dashboard/metrics, que retorna totais de alunos ativos, "
+     "pagamentos do mês, inadimplentes e check-ins do dia (consultas "
+     "agregadas em SQL). RBAC Admin. Testes em tests/api.test.js."),
+
+    ("Heading 3", "Requisitos não funcionais"),
+    ("Normal",
+     "RNF01 — Interface simples e intuitiva: SPA com menu lateral fixo "
+     "(public/index.html), Tailwind CSS aplicando paleta consistente em "
+     "public/styles.css, navegação por data-action sem recarregar a "
+     "página. Validações em tempo real (máscara de CPF, formato de "
+     "e-mail) reduzem erros de digitação."),
+    ("Normal",
+     "RNF02 — Controle de acesso por tipo de usuário: middleware "
+     "requireAuth + requireRole em lib/auth.js aplicado a cada rota /api/* "
+     "conforme matriz do QUADRO 3 (Admin, Professor, Aluno); três perfis "
+     "no schema (tabela usuarios.tipo); front-end esconde menus por perfil "
+     "em public/js/core.js. Testes: 12 cenários em tests/api.test.js + "
+     "tests/api.extra.test.js cobrem cada combinação papel × rota; "
+     "tests/e2e/rbac.spec.js valida visibilidade do menu."),
+    ("Normal",
+     "RNF03 — Banco relacional: MySQL 8, schema normalizado em 8 tabelas "
+     "(sql/01_schema.sql) com FKs, ENUMs, UNIQUE, CHECK e índices em todas "
+     "as FKs. Conformidade ACID herdada do MySQL (InnoDB)."),
+    ("Normal",
+     "RNF04 — Acessível por navegador: aplicação web servida por Express "
+     "em server.js; front-end estático compatível com qualquer navegador "
+     "moderno; nenhuma instalação cliente necessária. Front-end já "
+     "publicado em https://gym-control-pearl.vercel.app."),
+    ("Normal",
+     "RNF05 — Boa organização visual: hierarquia clara (header com "
+     "identificação do perfil, menu lateral por domínio, área principal "
+     "com tabelas paginadas e formulários alinhados); espaçamento e "
+     "tipografia consistentes via classes utilitárias do Tailwind; ícones "
+     "discretos guiando ações primárias."),
+    ("Normal",
+     "RNF06 — Consultas rápidas: connection pool do mysql2 (10 conexões) "
+     "em server.js; índices em todas as FKs e em campos de busca (CPF, "
+     "e-mail, data de pagamento); paginação no front-end. As consultas do "
+     "dashboard são todas O(1) em número de tabelas tocadas, com agregação "
+     "feita no SQL e não em JavaScript."),
+    ("Normal",
+     "RNF07 — Proteger informações dos usuários: senhas em bcrypt (custo "
+     "10) — nunca em texto plano; sessão por JWT em cookie httpOnly + "
+     "__Secure- + SameSite=Strict (sem acesso por JavaScript do cliente); "
+     "todas as queries parametrizadas (sem SQL injection); helmet com CSP "
+     "estrita, HSTS, X-Frame-Options DENY; rate-limit em /api/auth/login "
+     "(5/min) defendendo contra força bruta; sanitizador de logs em "
+     "lib/log-sanitizer.js remove CPF, e-mail, hash e token antes de "
+     "imprimir; JWT_SECRET obrigatório em produção. Detalhamento completo "
+     "em docs/entrega-final/added/seguranca.md."),
+
     # ─── Capítulo 10 ────────────────────────────────────────────────────────
     ("Heading 1", "10 ACESSO E EXECUÇÃO DO SOFTWARE"),
 
@@ -317,25 +428,31 @@ def build():
 
 def _force_update_fields(path):
     """Liga w:updateFields no settings.xml interno do docx. Quando o Word
-    abrir o arquivo, ele atualiza automaticamente o Sumário e demais campos."""
+    abrir o arquivo, ele atualiza automaticamente o Sumário e demais campos.
+
+    Injeção é feita em nível de string para preservar prefixos de namespace
+    originais (mc, w14, w15, w16...). Um round-trip via ElementTree renomearia
+    todos os prefixos para ns0/ns1/... e quebraria o atributo mc:Ignorable,
+    que referencia w14/w15/w16... por nome — o Word então marca o arquivo
+    como corrompido."""
+    import re
     import zipfile
     import shutil
-    from xml.etree import ElementTree as ET
 
-    NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-    ET.register_namespace("w", NS)
     tmp = path + ".tmp"
+    tag = '<w:updateFields w:val="true"/>'
 
     with zipfile.ZipFile(path, "r") as zin, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
         for item in zin.infolist():
             data = zin.read(item.filename)
             if item.filename == "word/settings.xml":
-                root = ET.fromstring(data)
-                upd = root.find(f"{{{NS}}}updateFields")
-                if upd is None:
-                    upd = ET.SubElement(root, f"{{{NS}}}updateFields")
-                upd.set(f"{{{NS}}}val", "true")
-                data = ET.tostring(root, xml_declaration=True, encoding="UTF-8")
+                text = data.decode("utf-8")
+                if "<w:updateFields" in text:
+                    text = re.sub(r'<w:updateFields[^/]*/>', tag, text)
+                    text = re.sub(r'<w:updateFields\b[^>]*>.*?</w:updateFields>', tag, text, flags=re.S)
+                else:
+                    text = text.replace("</w:settings>", tag + "</w:settings>")
+                data = text.encode("utf-8")
             zout.writestr(item, data)
     shutil.move(tmp, path)
 
