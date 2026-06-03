@@ -426,6 +426,56 @@ def build():
     print("ficarem corretos. Não precisa rodar F9 manualmente.")
 
 
+def _clear_toc_caches(text):
+    """Para cada campo TOC, apaga o conteúdo cacheado entre seu fldChar
+    separate e o seu fldChar end correspondente. Como entradas do Sumário
+    contêm campos PAGEREF aninhados (cada um com seu próprio par
+    begin/end), regex sozinho não basta — é preciso casar par a par
+    contando profundidade."""
+    import re as _re
+    SEPARATE = '<w:fldChar w:fldCharType="separate"/>'
+    BEGIN    = '<w:fldChar w:fldCharType="begin"'   # prefixo (pode ter w:dirty)
+    END      = '<w:fldChar w:fldCharType="end"/>'
+    FALLBACK = '<w:r><w:t xml:space="preserve">Atualize os campos (F9).</w:t></w:r>'
+
+    out = []
+    cursor = 0
+    # Itera em cada instrText que abre um TOC. Para cada um, encontra o
+    # próximo separate logo a seguir; do separate, anda contando
+    # begin/end até zerar e achar o end deste TOC.
+    for m in _re.finditer(r'<w:instrText[^>]*>\s*TOC\b[^<]*</w:instrText>', text):
+        sep_idx = text.find(SEPARATE, m.end())
+        if sep_idx < 0:
+            continue
+        sep_end = sep_idx + len(SEPARATE)
+        # walk para frente contando depth
+        depth = 1
+        i = sep_end
+        toc_end_start = -1
+        while i < len(text):
+            b = text.find(BEGIN, i)
+            e = text.find(END, i)
+            if e < 0:
+                break
+            if b >= 0 and b < e:
+                depth += 1
+                i = b + len(BEGIN)
+            else:
+                depth -= 1
+                if depth == 0:
+                    toc_end_start = e
+                    break
+                i = e + len(END)
+        if toc_end_start < 0:
+            continue
+        # mantém [cursor : sep_end), insere fallback, pula para o end
+        out.append(text[cursor:sep_end])
+        out.append(FALLBACK)
+        cursor = toc_end_start
+    out.append(text[cursor:])
+    return "".join(out)
+
+
 def _force_update_fields(path):
     """Liga w:updateFields no settings.xml interno do docx. Quando o Word
     abrir o arquivo, ele atualiza automaticamente o Sumário e demais campos.
@@ -454,11 +504,16 @@ def _force_update_fields(path):
                     text = text.replace("</w:settings>", tag + "</w:settings>")
                 data = text.encode("utf-8")
             elif item.filename == "word/document.xml":
-                # Marca cada TOC/TOF como sujo. O setting global updateFields
-                # atualiza o TOC principal (\o), mas tabelas de figuras/quadros
-                # (TOC \c "FIGURA"/"QUADRO") ficam com a versão cacheada entre
-                # <w:fldChar separate/> e <w:fldChar end/> a menos que o
-                # fldChar begin tenha w:dirty="true".
+                # Para cada campo TOC (Sumário, Lista de Quadros, Lista de
+                # Figuras):
+                #   1) marca o fldChar begin como w:dirty="true"
+                #   2) APAGA todo o conteúdo cacheado entre <w:fldChar
+                #      separate/> e <w:fldChar end/>. Sem cache, o Word não
+                #      tem como mostrar números de página antigos: ele tem
+                #      que recalcular do zero ao abrir.
+                # Isso resolve o off-by-one em listas que mudam de tamanho
+                # ao serem refeitas: Word só conhece a paginação correta
+                # depois que as listas já têm sua versão definitiva.
                 text = data.decode("utf-8")
                 text = re.sub(
                     r'(<w:fldChar w:fldCharType="begin")(/>\s*</w:r>\s*<w:r[^>]*>(?:<w:rPr>.*?</w:rPr>)?\s*<w:instrText[^>]*>\s*TOC\b)',
@@ -466,6 +521,9 @@ def _force_update_fields(path):
                     text,
                     flags=re.S,
                 )
+                # Limpa o cache de cada TOC. O grupo anchored garante que só
+                # apagamos cache de campos cuja instrText começa com "TOC ".
+                text = _clear_toc_caches(text)
                 data = text.encode("utf-8")
             zout.writestr(item, data)
     shutil.move(tmp, path)
