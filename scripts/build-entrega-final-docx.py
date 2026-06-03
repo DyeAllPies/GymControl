@@ -470,6 +470,23 @@ def _move_sumario_before_lists(text):
         return text
     sum_block_end = close_p + len('</w:p>')
 
+    # Estende para incluir qualquer parágrafo seguinte que seja apenas
+    # um page break (ex.: <w:p>...<w:br w:type="page"/>...</w:p> sem
+    # texto visível). Assim a quebra de página que separava o Sumário
+    # do bloco seguinte viaja junto e a Lista de Quadros ainda começa
+    # em página própria, sem deixar página em branco no fim.
+    while True:
+        next_p = _re.match(r'<w:p\b[^>]*>(.*?)</w:p>', text[sum_block_end:], _re.S)
+        if not next_p:
+            break
+        inner = next_p.group(1)
+        has_page_break = '<w:br w:type="page"/>' in inner
+        has_text = bool(_re.search(r'<w:t[^>]*>[^<]', inner))
+        if has_page_break and not has_text:
+            sum_block_end += next_p.end()
+        else:
+            break
+
     # 3) Acha o início do <w:p> com "LISTA DE QUADROS".
     lq = _re.search(r'<w:p\b[^>]*>(?:(?!</w:p>).)*?LISTA DE QUADROS', text, _re.S)
     if not lq:
@@ -481,9 +498,30 @@ def _move_sumario_before_lists(text):
         return text
 
     sumario_block = text[sum_p_start:sum_block_end]
-    return (
+    moved = (
         text[:lq_start] + sumario_block + text[lq_start:sum_p_start] + text[sum_block_end:]
     )
+
+    # Garante que o parágrafo do heading "LISTA DE QUADROS" comece em
+    # página nova (vem logo após o Sumário). Injeta <w:pageBreakBefore/>
+    # no início do pPr desse parágrafo. Cuidado: precisa ser o heading
+    # de verdade, não uma entrada de TOC. O heading está na nova posição
+    # logo após o sumario_block.
+    new_lq_start = lq_start + len(sumario_block)
+    p_open_re = _re.compile(r'<w:p\b[^>]*>')
+    m_p = p_open_re.match(moved, new_lq_start)
+    if not m_p:
+        return moved
+    after_p_open = m_p.end()
+    # Caso 1: já existe <w:pPr>...</w:pPr> logo após <w:p ...>
+    ppr_open = _re.match(r'<w:pPr\b[^>]*>', moved[after_p_open:])
+    if ppr_open:
+        ppr_start = after_p_open + ppr_open.end()
+        if '<w:pageBreakBefore/>' in moved[ppr_start:ppr_start+400]:
+            return moved   # idempotente
+        return moved[:ppr_start] + '<w:pageBreakBefore/>' + moved[ppr_start:]
+    # Caso 2: não tem pPr — cria um.
+    return moved[:after_p_open] + '<w:pPr><w:pageBreakBefore/></w:pPr>' + moved[after_p_open:]
 
 
 def _shift_tof_page_numbers(text, delta):
@@ -587,6 +625,17 @@ def _force_update_fields(path):
                     text,
                     flags=re.S,
                 )
+                # delta=1 nos números cacheados das listas: a única
+                # mudança real de paginação é a expansão do Sumário,
+                # que ganha entradas para os capítulos 9, 10 e 11 e
+                # cresce 1 página. As listas recebem pageBreakBefore
+                # via _move_sumario_before_lists, então não geram
+                # páginas extras nem ficam coladas no fim do Sumário.
+                # TODO: refatorar a construção do docx para inserir os
+                # capítulos novos e mover o Sumário de forma
+                # estruturada (manipulando o body XML em python-docx),
+                # e deixar o Word recalcular os campos sozinho em vez
+                # de mexer em números cacheados na mão.
                 text = _shift_tof_page_numbers(text, delta=1)
                 text = _move_sumario_before_lists(text)
                 data = text.encode("utf-8")
