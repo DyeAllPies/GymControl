@@ -17,6 +17,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 OUT  = ROOT / "docs" / "entrega-final" / "GymControl_EntregaFinal.zip"
 DOCX = ROOT / "docs" / "entrega-final" / "GymControl_ProjetoFinal.docx"
+PDF  = ROOT / "docs" / "entrega-final" / "GymControl_ProjetoFinal.pdf"
+MD   = ROOT / "docs" / "entrega-final" / "GymControl_ProjetoFinal.md"
 VIDEO = ROOT / "test-results" / "human-e2e.mp4"
 
 README = """# GymControl — Entrega Final
@@ -28,6 +30,25 @@ Este ZIP é a entrega final do trabalho. Contém o relatório revisado da
 entrega parcial (com os capítulos adicionais que descrevem a
 implementação realizada) e o software desenvolvido na íntegra, como
 exigido pelo enunciado da disciplina.
+
+## Formatos do relatório
+
+O relatório é o mesmo conteúdo em três formatos para conveniência:
+
+- `GymControl_ProjetoFinal.docx` — formato principal (Microsoft Word).
+  **Ao abrir, o Word vai exibir uma mensagem perguntando se deve
+  atualizar os campos automáticos (Sumário etc.) — clique em "Sim"
+  ou posicione o cursor no Sumário e pressione F9.** Sem isso, o
+  Sumário aparece com texto de placeholder em vez das entradas
+  reais. É o comportamento padrão do Word para campos de Sumário e
+  é esperado.
+- `GymControl_ProjetoFinal.pdf` — versão exportada do docx já com os
+  campos atualizados. Abre em qualquer leitor de PDF, sem dependência
+  de Word. Use este se preferir não lidar com o prompt de atualização
+  do Word ou se não tiver Office instalado.
+- `GymControl_ProjetoFinal.md` — versão em Markdown (texto puro) do
+  mesmo relatório. Abre até no Bloco de Notas (Notepad) do Windows.
+  Útil como fallback caso PDF e Word não estejam disponíveis.
 
 ## Como esta entrega cumpre os requisitos do enunciado
 
@@ -72,7 +93,12 @@ presentes no documento, todos com a mesma numeração da parcial original:
 
 - `README_ENTREGA_FINAL.md` — este arquivo.
 - `GymControl_ProjetoFinal.docx` — relatório revisado (documento
-  principal da entrega).
+  principal da entrega; Word vai pedir para atualizar os campos ao
+  abrir — clique "Sim").
+- `GymControl_ProjetoFinal.pdf` — mesmo relatório em PDF, com os
+  campos já atualizados (não exige Word, nem prompts).
+- `GymControl_ProjetoFinal.md` — mesmo relatório em Markdown (abre
+  no Notepad).
 - `human-e2e.mp4` — vídeo único da suíte Playwright executada em modo
   "human-paced" (pausa de 1 s entre ações), gravando o fluxo completo
   da aplicação: login admin, CRUD de alunos com máscara de CPF, criação
@@ -101,11 +127,60 @@ Repositório oficial em https://github.com/eduardo2580/GymControl.
 """
 
 
+def _export_pdf(docx, pdf):
+    """Usa o Word via COM (PowerShell) para abrir o docx, atualizar os
+    campos (Sumário, Lista de Quadros, Lista de Figuras) e exportar
+    PDF preservando todo o layout. Requer Microsoft Word instalado."""
+    docx_abs = str(docx.resolve()).replace("'", "''")
+    pdf_abs  = str(pdf.resolve()).replace("'", "''")
+    ps = f"""
+$ErrorActionPreference = 'Stop'
+$w = New-Object -ComObject Word.Application
+$w.Visible = $false
+$w.DisplayAlerts = 0
+try {{
+    $d = $w.Documents.Open('{docx_abs}', $false, $true)
+    # Atualiza todos os campos duas vezes (paginação estabiliza)
+    $null = $d.Fields.Update()
+    foreach ($toc in $d.TablesOfContents) {{ $null = $toc.Update() }}
+    $null = $d.Fields.Update()
+    foreach ($toc in $d.TablesOfContents) {{ $null = $toc.Update() }}
+    # 17 = wdExportFormatPDF, 0 = wdExportOptimizeForPrint
+    $d.ExportAsFixedFormat('{pdf_abs}', 17, $false, 0)
+    $d.Close($false)
+}} finally {{
+    $w.Quit()
+}}
+"""
+    subprocess.run(
+        ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
+        check=True, capture_output=True, text=True,
+    )
+
+
+def _export_md(docx, md):
+    """Converte o docx para Markdown via pandoc."""
+    subprocess.run(
+        ["pandoc", str(docx), "-o", str(md),
+         "--from", "docx", "--to", "gfm",
+         "--wrap=none"],
+        check=True, capture_output=True, text=True,
+    )
+
+
 def main():
     if not DOCX.exists():
         sys.exit(f"Não encontrei {DOCX}. Rode scripts/build-entrega-final-docx.py antes.")
     if not VIDEO.exists():
         sys.exit(f"Não encontrei {VIDEO}.")
+
+    print(">> exportando PDF via Word COM...")
+    _export_pdf(DOCX, PDF)
+    print(f"   {PDF.relative_to(ROOT)}  ({PDF.stat().st_size // 1024} KB)")
+
+    print(">> exportando Markdown via pandoc...")
+    _export_md(DOCX, MD)
+    print(f"   {MD.relative_to(ROOT)}  ({MD.stat().st_size // 1024} KB)")
 
     # Lista de arquivos versionados, gerada pelo git, garantindo
     # consistência com o que está no repo e excluindo node_modules,
@@ -120,6 +195,11 @@ def main():
     # dentro de source/.
     skip_in_source = {
         "docs/entrega-final/GymControl_ProjetoFinal.docx",
+        "docs/entrega-final/GymControl_ProjetoFinal.pdf",
+        "docs/entrega-final/GymControl_ProjetoFinal.md",
+        "docs/entrega-final/GymControl_EntregaFinal.zip",  # NÃO incluir o
+        # próprio ZIP dentro dele mesmo — git ls-files retorna o ZIP (já
+        # versionado) e isso causaria recursão infinita.
         "test-results/human-e2e.mp4",
     }
 
@@ -130,6 +210,8 @@ def main():
     with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         z.writestr("README_ENTREGA_FINAL.md", README)
         z.write(DOCX, "GymControl_ProjetoFinal.docx")
+        z.write(PDF,  "GymControl_ProjetoFinal.pdf")
+        z.write(MD,   "GymControl_ProjetoFinal.md")
         z.write(VIDEO, "human-e2e.mp4")
         for rel in tracked:
             if rel in skip_in_source:
