@@ -243,12 +243,32 @@ def build():
 
     doc = Document(str(SRC))
 
-    # 1. Cover page: trocar "Planejamento do Sistema" por "Sistema Implementado"
+    # Cover page mantém "Planejamento do Sistema" — o sistema ainda não está
+    # em produção real (sem deploy de back-end ativo).
+
+    # 1b. Parágrafo de organização do trabalho no capítulo 1: reescrever para
+    # refletir os 11 capítulos da entrega final (era 9).
+    new_intro = (
+        "O trabalho está organizado em onze capítulos. Após esta introdução, "
+        "o capítulo 2 apresenta o descritivo computacional do software. "
+        "O capítulo 3 caracteriza o sistema. "
+        "O capítulo 4 lista os requisitos funcionais e não funcionais. "
+        "O capítulo 5 apresenta os diagramas UML que modelam o sistema. "
+        "O capítulo 6 descreve as tecnologias escolhidas. "
+        "O capítulo 7 traz o cronograma de desenvolvimento. "
+        "O capítulo 8 apresenta o orçamento estimado. "
+        "O capítulo 9 detalha a implementação efetivamente realizada. "
+        "O capítulo 10 informa como acessar e executar o software. "
+        "Por fim, o capítulo 11 traz as considerações finais. "
+        "As referências utilizadas estão arroladas ao final do trabalho."
+    )
     for p in doc.paragraphs:
-        if p.text.strip() == "Planejamento do Sistema":
-            for run in p.runs:
-                run.text = run.text.replace("Planejamento do Sistema",
-                                            "Sistema Implementado")
+        if "nove capítulos" in p.text:
+            # Mantém o primeiro run e zera os demais, depois substitui o texto
+            if p.runs:
+                p.runs[0].text = new_intro
+                for r in p.runs[1:]:
+                    r.text = ""
             break
 
     # 2. Achar "9 CONSIDERAÇÕES FINAIS"
@@ -281,13 +301,43 @@ def build():
                 target.runs[0].text = "11" + target.runs[0].text[1:]
 
     doc.save(str(DST))
+
+    # 5. Marca todos os campos para atualizar quando o Word abrir — sumário,
+    # lista de quadros, lista de figuras, referências REF. Isso evita o
+    # passo manual de F9 antes de entregar.
+    _force_update_fields(str(DST))
+
     size_kb = os.path.getsize(DST) // 1024
     print(f"OK: {DST.relative_to(ROOT)}  ({size_kb} KB)")
     print()
-    print("PRÓXIMO PASSO: abra o arquivo no Word e atualize os campos:")
-    print("  1. Clique no Sumário > Atualizar Campo > Atualizar a tabela inteira")
-    print("  2. Repita para Lista de Quadros e Lista de Figuras")
-    print("  3. Salve e feche.")
+    print("Ao abrir o docx no Word, ele vai perguntar se deve atualizar os campos:")
+    print("aceite (\"Sim\") para o Sumário, Lista de Quadros e Lista de Figuras")
+    print("ficarem corretos. Não precisa rodar F9 manualmente.")
+
+
+def _force_update_fields(path):
+    """Liga w:updateFields no settings.xml interno do docx. Quando o Word
+    abrir o arquivo, ele atualiza automaticamente o Sumário e demais campos."""
+    import zipfile
+    import shutil
+    from xml.etree import ElementTree as ET
+
+    NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    ET.register_namespace("w", NS)
+    tmp = path + ".tmp"
+
+    with zipfile.ZipFile(path, "r") as zin, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            data = zin.read(item.filename)
+            if item.filename == "word/settings.xml":
+                root = ET.fromstring(data)
+                upd = root.find(f"{{{NS}}}updateFields")
+                if upd is None:
+                    upd = ET.SubElement(root, f"{{{NS}}}updateFields")
+                upd.set(f"{{{NS}}}val", "true")
+                data = ET.tostring(root, xml_declaration=True, encoding="UTF-8")
+            zout.writestr(item, data)
+    shutil.move(tmp, path)
 
 
 if __name__ == "__main__":
