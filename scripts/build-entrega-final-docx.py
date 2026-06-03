@@ -524,6 +524,24 @@ def _move_sumario_before_lists(text):
     return moved[:after_p_open] + '<w:pPr><w:pageBreakBefore/></w:pPr>' + moved[after_p_open:]
 
 
+def _strip_trailing_pagebreak_in_sdt(text):
+    """Remove parágrafos vazios contendo apenas <w:br w:type="page"/>
+    que ficaram imediatamente antes do fechamento de um SDT (estrutura
+    que envolve as Listas de Quadros/Figuras). Esses page breaks
+    seguiam o Sumário no layout original; depois de mover o Sumário
+    para a frente, eles ficaram redundantes e somam com o page break
+    da sectPr seguinte — gerando uma página em branco entre Lista de
+    Figuras e o Capítulo 1."""
+    import re as _re
+    pattern = (
+        r'<w:p\b[^>]*>\s*'
+        r'<w:r\b[^>]*>\s*<w:br\s+w:type="page"\s*/>\s*</w:r>\s*'
+        r'</w:p>'
+        r'(\s*</w:sdtContent>\s*</w:sdt>)'
+    )
+    return _re.sub(pattern, r'\1', text)
+
+
 def _shift_tof_page_numbers(text, delta):
     """Encontra cada campo TOC \\c (Lista de Quadros / Lista de Figuras) e
     incrementa por `delta` cada número de página cacheado dentro dele.
@@ -638,6 +656,7 @@ def _force_update_fields(path):
                 # de mexer em números cacheados na mão.
                 text = _shift_tof_page_numbers(text, delta=1)
                 text = _move_sumario_before_lists(text)
+                text = _strip_trailing_pagebreak_in_sdt(text)
                 data = text.encode("utf-8")
             zout.writestr(item, data)
     shutil.move(tmp, path)
